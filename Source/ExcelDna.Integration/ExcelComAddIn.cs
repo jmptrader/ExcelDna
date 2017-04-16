@@ -122,10 +122,14 @@ namespace ExcelDna.Integration
 
             try
             {
+                Logger.ComAddIn.Verbose("Loading Ribbon/COM Add-In {0} ({1}) {2} / {3}",
+                    addIn.GetType().FullName, friendlyName, progId, clsId);
+
                 using (new SingletonClassFactoryRegistration(addIn, clsId))
                 using (new ProgIdRegistration(progId, clsId))
                 using (new ClsIdRegistration(clsId, progId))
                 using (new ComAddInRegistration(progId, friendlyName, description))
+                using (new AutomationSecurityOverride(app))
                 {
                     excelComAddIns = appType.InvokeMember("COMAddIns", BindingFlags.GetProperty, null, app, null, ci);
                     //                            Debug.Print("Got COMAddins object: " + excelComAddIns.GetType().ToString());
@@ -141,11 +145,14 @@ namespace ExcelDna.Integration
                     comAddIn.GetType().InvokeMember("Connect", BindingFlags.SetProperty, null, comAddIn, new object[] { true }, ci);
                     //                            Debug.Print("COMAddin is loaded.");
                     loadedComAddIns.Add(comAddIn);
+
+                    Logger.ComAddIn.Verbose("Completed Loading Ribbon/COM Add-In");
+
                 }
             }
             catch (UnauthorizedAccessException secex)
             {
-                Logger.ComAddIn.Error(secex, "The Ribbon/COM add-in helper required by add-in {0} could not be registered.\r\nThis may be due to restricted permissions on the user's HKCU\\Software\\Classes key.", DnaLibrary.CurrentLibrary.Name);
+                Logger.ComAddIn.Error(secex, "The Ribbon/COM Add-In helper required by add-in {0} could not be registered.\r\nThis may be due to restricted permissions on the HKCU\\Software\\Classes key", DnaLibrary.CurrentLibrary.Name);
             }
             catch (Exception ex)
             {
@@ -153,11 +160,14 @@ namespace ExcelDna.Integration
                 // in a COM-unfriendly mode where (sometimes) the COM add-in for the ribbon won't load. 
                 // We skip the log display in this case.
                 // CONSIDER: How would an add-in know that its COM AddIn load failed in this case?
-                if (!Environment.CommandLine.Contains(" /K"))
+                if (Environment.CommandLine.Contains(" /K"))
                 {
-                    Logger.ComAddIn.Error("The Ribbon/COM add-in helper required by add-in {0} could not be registered.\r\nThis is an unexpected error.", DnaLibrary.CurrentLibrary.Name);
+                    Logger.ComAddIn.Info("Load Ribbon/COM Add-In exception with /K in CommandLine \r\n{0}", ex.ToString());
                 }
-                Logger.ComAddIn.Info("LoadComAddIn exception: {0} with /K in CommandLine", ex.ToString());
+                else
+                {
+                    Logger.ComAddIn.Error(ex, "The Ribbon/COM add-in helper required by add-in {0} could not be registered.\r\nThis is an unexpected error.\r\nError details: {1}", DnaLibrary.CurrentLibrary.Name, ex.ToString());
+                }
             }
         }
 
@@ -167,9 +177,10 @@ namespace ExcelDna.Integration
             foreach (object comAddIn in loadedComAddIns)
             {
                 comAddIn.GetType().InvokeMember("Connect", System.Reflection.BindingFlags.SetProperty, null, comAddIn, new object[] { false }, ci);
-                Logger.ComAddIn.Info("COMAddin is unloaded.");
+                Logger.ComAddIn.Info("Ribbon/COM Add-In Unloaded.");
             }
         }
+
     }
 
 }
